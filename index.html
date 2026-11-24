@@ -32,26 +32,52 @@ const seance = [
   { duree: 60,  niveau: 3 }
 ];
 
+let device = null;
 let controlPoint = null;
+const pause = (ms) => new Promise(r => setTimeout(r, ms));
 const log = (t) => document.getElementById('log').textContent = t + '\n' + document.getElementById('log').textContent;
+
+async function connecter() {
+  for (let essai = 1; essai <= 3; essai++) {
+    try {
+      log('Essai ' + essai + ' : connexion à ' + device.name + '...');
+      if (device.gatt.connected) device.gatt.disconnect();
+      await pause(800);
+      const server = await device.gatt.connect();
+      await pause(1000);
+      const service = await server.getPrimaryService(0x1826);
+      await pause(300);
+
+      const data = await service.getCharacteristic(0x2AD2);
+      data.addEventListener('characteristicvaluechanged', lireDonnees);
+      await data.startNotifications();
+      await pause(300);
+
+      controlPoint = await service.getCharacteristic(0x2AD9);
+      controlPoint.addEventListener('characteristicvaluechanged', e => log('Réponse vélo : ' + new Uint8Array(e.target.value.buffer).join(',')));
+      await controlPoint.startNotifications();
+      await pause(300);
+      await controlPoint.writeValue(new Uint8Array([0x00]));
+
+      log('Connecté ✅');
+      document.getElementById('btnStart').disabled = false;
+      return;
+    } catch (err) {
+      log('Essai ' + essai + ' raté : ' + err.message);
+      await pause(1500);
+    }
+  }
+  log('❌ Connexion impossible. Éteins/rallume le vélo et réessaie.');
+}
 
 document.getElementById('btnConnect').onclick = async () => {
   try {
-    const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [0x1826] }] });
-    log('Connexion à ' + device.name + '...');
-    const server = await device.gatt.connect();
-    const service = await server.getPrimaryService(0x1826);
-
-    const data = await service.getCharacteristic(0x2AD2);
-    data.addEventListener('characteristicvaluechanged', lireDonnees);
-    await data.startNotifications();
-
-    controlPoint = await service.getCharacteristic(0x2AD9);
-    controlPoint.addEventListener('characteristicvaluechanged', e => log('Réponse vélo : ' + new Uint8Array(e.target.value.buffer).join(',')));
-    await controlPoint.startNotifications();
-    await controlPoint.writeValue(new Uint8Array([0x00]));
-    log('Connecté ✅');
-    document.getElementById('btnStart').disabled = false;
+    device = await navigator.bluetooth.requestDevice({ filters: [{ services: [0x1826] }] });
+    device.addEventListener('gattserverdisconnected', () => {
+      log('Vélo déconnecté');
+      document.getElementById('btnStart').disabled = true;
+    });
+    await connecter();
   } catch (err) { log('Erreur : ' + err.message); }
 };
 
@@ -83,7 +109,7 @@ document.getElementById('btnStart').onclick = async () => {
     await reglerResistance(etape.niveau);
     for (let t = etape.duree; t > 0; t--) {
       document.getElementById('timer').textContent = Math.floor(t/60) + ':' + String(t%60).padStart(2,'0');
-      await new Promise(r => setTimeout(r, 1000));
+      await pause(1000);
     }
   }
   document.getElementById('timer').textContent = 'Fini 🎉';
