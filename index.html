@@ -1,120 +1,172 @@
 <!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mon Vélo</title>
+<html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mon Vélo</title>
 <style>
-  body { font-family: sans-serif; background:#111; color:#eee; text-align:center; padding:20px; }
-  button { font-size:1.2em; padding:15px 25px; margin:10px; border:none; border-radius:10px; background:#2a7; color:#fff; }
-  button:disabled { background:#555; }
-  .stat { font-size:2.2em; margin:8px; }
-  .label { font-size:0.8em; color:#aaa; }
-  #log { font-size:0.8em; color:#888; margin-top:20px; white-space:pre-line; }
-</style>
-</head>
-<body>
+body{font-family:sans-serif;background:#111;color:#eee;text-align:center;padding:15px;margin:0}
+button{font-size:1.1em;padding:14px 22px;margin:8px;border:none;border-radius:10px;background:#2a7;color:#fff}
+button:disabled{background:#555}
+.prof{background:#36c;font-size:1.4em;width:80%}.sec{background:#444}
+.card{background:#222;border-radius:10px;padding:10px;margin:8px auto;max-width:420px;text-align:left}
+.done{opacity:.5}
+.stat{font-size:2em;margin:6px}.label{font-size:.8em;color:#aaa}
+#consigne{font-size:1.3em;color:#fc6;margin:10px}
+#log{font-size:.8em;color:#888;margin-top:15px;white-space:pre-line}
+.hidden{display:none}
+</style></head><body>
 <h1>🚴 Mon Vélo</h1>
-<button id="btnConnect">Se connecter au vélo</button>
-<button id="btnStart" disabled>Lancer la séance test</button>
 
+<div id="ecranProfil">
+<button class="prof" onclick="choisirProfil('seb')">Sébastien</button>
+<button class="prof" onclick="choisirProfil('justine')">Justine</button>
+</div>
+
+<div id="ecranListe" class="hidden">
+<h2 id="titreProfil"></h2>
+<button class="sec" onclick="show('ecranProfil')">← Changer de profil</button>
+<div id="liste"></div>
+</div>
+
+<div id="ecranSeance" class="hidden">
+<h2 id="titreSeance"></h2>
+<button id="btnConnect">Se connecter au vélo</button>
+<button id="btnStart" disabled>Lancer la séance</button>
+<button class="sec" onclick="arreter()">Arrêter / retour</button>
+<div id="consigne"></div>
+<div class="stat"><span id="timer">--:--</span><div class="label">Temps restant de l'étape</div></div>
+<div class="stat"><span id="level">--</span><div class="label">Résistance (sur 32)</div></div>
 <div class="stat"><span id="power">--</span> W<div class="label">Puissance</div></div>
 <div class="stat"><span id="cadence">--</span> rpm<div class="label">Cadence</div></div>
-<div class="stat"><span id="speed">--</span> km/h<div class="label">Vitesse</div></div>
-<div class="stat"><span id="level">--</span><div class="label">Résistance demandée</div></div>
-<div class="stat"><span id="timer">--:--</span><div class="label">Temps restant de l'étape</div></div>
+<div class="stat"><span id="total">--:--</span><div class="label">Temps total restant</div></div>
+</div>
 <div id="log"></div>
 
 <script>
-const seance = [
-  { duree: 120, niveau: 3 },
-  { duree: 120, niveau: 8 },
-  { duree: 60,  niveau: 3 }
-];
+// ===== PROGRAMMES =====
+// e(minutes, niveau de résistance, consigne)
+const e=(m,n,c)=>({d:Math.round(m*60),n,c});
+function rep(nb,a,b){let r=[];for(let i=0;i<nb;i++)r.push(a,b);return r;}
 
-let device = null;
-let controlPoint = null;
-const pause = (ms) => new Promise(r => setTimeout(r, ms));
-const log = (t) => document.getElementById('log').textContent = t + '\n' + document.getElementById('log').textContent;
+const programmes={seb:{nom:'Sébastien',seances:[]},justine:{nom:'Justine',seances:[]}};
 
-async function connecter() {
-  for (let essai = 1; essai <= 3; essai++) {
-    try {
-      log('Essai ' + essai + ' : connexion à ' + device.name + '...');
-      if (device.gatt.connected) device.gatt.disconnect();
-      await pause(800);
-      const server = await device.gatt.connect();
-      await pause(1000);
-      const service = await server.getPrimaryService(0x1826);
-      await pause(300);
-
-      const data = await service.getCharacteristic(0x2AD2);
-      data.addEventListener('characteristicvaluechanged', lireDonnees);
-      await data.startNotifications();
-      await pause(300);
-
-      controlPoint = await service.getCharacteristic(0x2AD9);
-      controlPoint.addEventListener('characteristicvaluechanged', e => log('Réponse vélo : ' + new Uint8Array(e.target.value.buffer).join(',')));
-      await controlPoint.startNotifications();
-      await pause(300);
-      await controlPoint.writeValue(new Uint8Array([0x00]));
-
-      log('Connecté ✅');
-      document.getElementById('btnStart').disabled = false;
-      return;
-    } catch (err) {
-      log('Essai ' + essai + ' raté : ' + err.message);
-      await pause(1500);
-    }
-  }
-  log('❌ Connexion impossible. Éteins/rallume le vélo et réessaie.');
+// Sébastien : 2 séances/semaine, récup 30 min + explosivité ping 45 min
+for(let s=1;s<=4;s++){
+ const p=s-1;
+ programmes.seb.seances.push({nom:`Semaine ${s} – Récup (30 min)`,etapes:[
+  e(5,4,'Échauffement tranquille, 85-90 rpm'),
+  e(20,6+p,'Endurance douce : tu dois pouvoir parler'),
+  e(5,3,'Retour au calme, jambes souples')]});
+ programmes.seb.seances.push({nom:`Semaine ${s} – Explosivité ping (45 min)`,etapes:[
+  e(10,5,'Échauffement progressif'),
+  ...rep(6+s,e(0.5,14+2*p,'Sprint ! Cadence max'),e(1.5,5,'Récup active')),
+  e(3,5,'Petite pause, on souffle'),
+  ...rep(3,e(2,10+p,'Tempo soutenu, 90 rpm'),e(1,5,'Récup')),
+  e(23-2*(6+s),4,'Retour au calme')]});
 }
 
-document.getElementById('btnConnect').onclick = async () => {
-  try {
-    device = await navigator.bluetooth.requestDevice({ filters: [{ services: [0x1826] }] });
-    device.addEventListener('gattserverdisconnected', () => {
-      log('Vélo déconnecté');
-      document.getElementById('btnStart').disabled = true;
-    });
-    await connecter();
-  } catch (err) { log('Erreur : ' + err.message); }
+// Justine : 2 séances/semaine, cardio 20 min + endurance et force 50 min
+for(let s=1;s<=4;s++){
+ const p=s-1;
+ programmes.justine.seances.push({nom:`Semaine ${s} – Cardio express (20 min)`,etapes:[
+  e(4,4,'Échauffement, 80-90 rpm'),
+  ...rep(6,e(1,10+2*p,'Effort ! Ça doit être dur'),e(1,5,'Récup')),
+  e(4,3,'Retour au calme')]});
+ programmes.justine.seances.push({nom:`Semaine ${s} – Endurance + force (50 min)`,etapes:[
+  e(8,4,'Échauffement progressif'),
+  e(12,7+p,'Endurance, rythme régulier'),
+  ...rep(4,e(3,14+2*p,'Force : grosse résistance, 60-70 rpm'),e(2,6,'Récup')),
+  e(5,8+p,'Dernier bloc endurance'),
+  e(5,3,'Retour au calme')]});
+}
+
+// ===== ÉCRANS =====
+const $=id=>document.getElementById(id);
+const show=id=>['ecranProfil','ecranListe','ecranSeance'].forEach(x=>$(x).classList.toggle('hidden',x!==id));
+const fmt=t=>Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+const log=t=>$('log').textContent=t+'\n'+$('log').textContent;
+const pause=ms=>new Promise(r=>setTimeout(r,ms));
+const cle=p=>'velo_'+p;
+const faites=p=>JSON.parse(localStorage.getItem(cle(p))||'[]');
+let profil=null,seance=null,enCours=false,device=null,controlPoint=null;
+
+function choisirProfil(p){profil=p;afficherListe();}
+function afficherListe(){
+ const prog=programmes[profil],f=faites(profil);
+ const prochaine=prog.seances.findIndex((_,i)=>!f.includes(i));
+ $('titreProfil').textContent='Programme de '+prog.nom;
+ $('liste').innerHTML=prog.seances.map((s,i)=>`<div class="card ${f.includes(i)?'done':''}">${f.includes(i)?'✅ ':''}${i===prochaine?'👉 ':''}<b>${s.nom}</b><br><button onclick="ouvrir(${i})">${f.includes(i)?'Refaire':'Faire'}</button></div>`).join('')
+  +`<button class="sec" onclick="if(confirm('Remettre le programme à zéro ?')){localStorage.removeItem(cle(profil));afficherListe()}">Remettre à zéro</button>`;
+ show('ecranListe');
+}
+function ouvrir(i){seance=i;$('titreSeance').textContent=programmes[profil].seances[i].nom;$('consigne').textContent='';$('btnStart').disabled=!controlPoint;show('ecranSeance');}
+function arreter(){enCours=false;afficherListe();}
+
+// ===== BLUETOOTH =====
+const avecDelai=(pr,ms)=>Promise.race([pr,new Promise((_,rej)=>setTimeout(()=>rej(new Error('pas de réponse après '+ms/1000+' s')),ms))]);
+async function connecter(){
+ for(let essai=1;essai<=3;essai++){
+  try{
+   log('Essai '+essai+' : connexion à '+device.name+'...');
+   if(device.gatt.connected)device.gatt.disconnect();
+   await pause(800);
+   const server=await avecDelai(device.gatt.connect(),10000);
+   await pause(1000);
+   const service=await avecDelai(server.getPrimaryService(0x1826),10000);
+   const data=await service.getCharacteristic(0x2AD2);
+   data.addEventListener('characteristicvaluechanged',lireDonnees);
+   await data.startNotifications();
+   await pause(300);
+   controlPoint=await service.getCharacteristic(0x2AD9);
+   await controlPoint.startNotifications();
+   await pause(300);
+   await controlPoint.writeValue(new Uint8Array([0x00]));
+   log('Connecté ✅');$('btnStart').disabled=false;return;
+  }catch(err){log('Essai '+essai+' raté : '+err.message);await pause(1500);}
+ }
+ log('❌ Connexion impossible. Éteins/rallume le vélo et réessaie.');
+}
+$('btnConnect').onclick=async()=>{
+ try{
+  device=await navigator.bluetooth.requestDevice({filters:[{services:[0x1826]}]});
+  device.addEventListener('gattserverdisconnected',()=>{log('Vélo déconnecté');controlPoint=null;$('btnStart').disabled=true;});
+  await connecter();
+ }catch(err){log('Erreur : '+err.message);}
 };
-
-function lireDonnees(e) {
-  const v = e.target.value;
-  const flags = v.getUint16(0, true);
-  let i = 2;
-  if (!(flags & 0x01)) { document.getElementById('speed').textContent = (v.getUint16(i, true) / 100).toFixed(1); i += 2; }
-  if (flags & 0x02) i += 2;
-  if (flags & 0x04) { document.getElementById('cadence').textContent = Math.round(v.getUint16(i, true) / 2); i += 2; }
-  if (flags & 0x08) i += 2;
-  if (flags & 0x10) i += 3;
-  if (flags & 0x20) i += 2;
-  if (flags & 0x40) { document.getElementById('power').textContent = v.getInt16(i, true); i += 2; }
+function lireDonnees(ev){
+ const v=ev.target.value,flags=v.getUint16(0,true);let i=2;
+ if(!(flags&0x01))i+=2;
+ if(flags&0x02)i+=2;
+ if(flags&0x04){$('cadence').textContent=Math.round(v.getUint16(i,true)/2);i+=2;}
+ if(flags&0x08)i+=2;
+ if(flags&0x10)i+=3;
+ if(flags&0x20)i+=2;
+ if(flags&0x40){$('power').textContent=v.getInt16(i,true);i+=2;}
+}
+async function reglerResistance(n){
+ $('level').textContent=n;
+ try{await controlPoint.writeValue(new Uint8Array([0x04,Math.min(n*10,250)]));}
+ catch(err){log('Erreur résistance : '+err.message);}
 }
 
-async function reglerResistance(niveau) {
-  document.getElementById('level').textContent = niveau;
-  try {
-    await controlPoint.writeValue(new Uint8Array([0x04, niveau * 10]));
-    log('Résistance → ' + niveau);
-  } catch (err) { log('Erreur résistance : ' + err.message); }
-}
-
-document.getElementById('btnStart').onclick = async () => {
-  document.getElementById('btnStart').disabled = true;
-  await controlPoint.writeValue(new Uint8Array([0x07])).catch(()=>{});
-  for (const etape of seance) {
-    await reglerResistance(etape.niveau);
-    for (let t = etape.duree; t > 0; t--) {
-      document.getElementById('timer').textContent = Math.floor(t/60) + ':' + String(t%60).padStart(2,'0');
-      await pause(1000);
-    }
+// ===== SÉANCE =====
+$('btnStart').onclick=async()=>{
+ const s=programmes[profil].seances[seance];
+ enCours=true;$('btnStart').disabled=true;
+ await controlPoint.writeValue(new Uint8Array([0x07])).catch(()=>{});
+ let reste=s.etapes.reduce((a,x)=>a+x.d,0);
+ for(const et of s.etapes){
+  if(!enCours)return;
+  $('consigne').textContent=et.c;
+  await reglerResistance(et.n);
+  for(let t=et.d;t>0;t--){
+   if(!enCours)return;
+   $('timer').textContent=fmt(t);$('total').textContent=fmt(reste--);
+   await pause(1000);
   }
-  document.getElementById('timer').textContent = 'Fini 🎉';
-  log('Séance terminée');
-  document.getElementById('btnStart').disabled = false;
+ }
+ const f=faites(profil);if(!f.includes(seance))f.push(seance);
+ localStorage.setItem(cle(profil),JSON.stringify(f));
+ $('timer').textContent='Fini 🎉';$('consigne').textContent='Bravo ! Séance enregistrée.';
+ enCours=false;$('btnStart').disabled=false;
+ await reglerResistance(3);
 };
 </script>
 </body>
