@@ -1,6 +1,6 @@
 Code appli vélo – index.html (v2)
 Copie tout le bloc ci-dessous et remplace le contenu de index.html sur GitHub.
-Version 4 : graphique de la séance, liste des étapes, résistance à avoir et résistance réelle du vélo, bouton retour, envoi de la résistance revu avec diagnostic.
+Version 6 : séances libres pour chaque profil, jauge de cadence (zone verte = rpm à avoir, point = ta cadence), cadence cible pour chaque étape, bouton test résistance, graphique de la séance, bouton retour.
 <!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mon Vélo</title>
 <style>
@@ -11,12 +11,14 @@ button:disabled{background:#555}
 .retour{background:#444;font-size:1em;padding:10px 16px;display:block;margin:0 0 8px 0}
 .card{background:#222;border-radius:10px;padding:10px;margin:8px auto;max-width:460px;text-align:left}
 .done{opacity:.55}
+h3{margin:22px 0 4px;color:#fc6}
 .grand{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
 .bloc{background:#222;border-radius:10px;padding:8px 14px;min-width:120px}
 .big{font-size:2.6em;font-weight:bold}.cible{color:#fc6}
 .stat{font-size:1.8em;margin:4px}.label{font-size:.8em;color:#aaa}
 #consigne{font-size:1.3em;color:#fc6;margin:8px}
 #ensuite{color:#aaa;margin-bottom:6px}
+#jauge{max-width:460px;margin:4px auto 8px}
 #etapes{max-height:170px;overflow-y:auto;background:#1a1a1a;border-radius:10px;text-align:left;padding:6px;margin:8px auto;max-width:460px;font-size:.9em}
 #etapes div{padding:3px 6px;border-radius:6px}
 #etapes .cur{background:#36c;color:#fff}
@@ -46,6 +48,7 @@ button:disabled{background:#555}
 <button id="btnStart" disabled>Lancer la séance</button>
 <div id="consigne"></div>
 <div id="ensuite"></div>
+<div id="jauge"></div>
 <div class="grand">
  <div class="bloc"><div class="big cible" id="cible">--</div><div class="label">Résistance à avoir</div></div>
  <div class="bloc"><div class="big" id="reel">--</div><div class="label">Résistance du vélo</div></div>
@@ -56,7 +59,7 @@ button:disabled{background:#555}
 </div>
 <div class="grand">
  <div class="stat"><span id="power">--</span> W<div class="label">Puissance</div></div>
- <div class="stat"><span id="cadence">--</span> rpm<div class="label">Cadence</div></div>
+ <div class="stat"><span id="cadence">--</span> rpm<div class="label">Cadence (cible <span id="rpmCible">--</span>)</div></div>
 </div>
 <div id="etapes"></div>
 </div>
@@ -64,42 +67,76 @@ button:disabled{background:#555}
 
 <script>
 // ===== PROGRAMMES =====
-// e(minutes, niveau de résistance sur 32, consigne)
-const e=(m,n,c)=>({d:Math.round(m*60),n,c});
+// e(minutes, niveau de résistance sur 32, consigne, cadence cible en rpm)
+const e=(m,n,c,r=75)=>({d:Math.round(m*60),n,c,r});
 function rep(nb,a,b){let r=[];for(let i=0;i<nb;i++)r.push(a,b);return r;}
 
 const programmes={seb:{nom:'Sébastien',seances:[]},justine:{nom:'Justine',seances:[]},
- test:{nom:'Test',seances:[{nom:'Test résistance',etapes:[e(0.5,3,'Résistance 3'),e(0.5,10,'Résistance 10'),e(0.5,20,'Résistance 20')]}]}};
+ test:{nom:'Test',seances:[{nom:'Test résistance',etapes:[e(0.5,3,'Résistance 3',75),e(0.5,10,'Résistance 10',75),e(0.5,20,'Résistance 20',75)]}]}};
 
 // Sébastien : 2 séances/semaine, récup 30 min + explosivité ping 45 min
 for(let s=1;s<=4;s++){
  const p=s-1;
  programmes.seb.seances.push({nom:`Semaine ${s} – Récup (30 min)`,etapes:[
-  e(5,4,'Échauffement tranquille, 85-90 rpm'),
-  e(20,6+p,'Endurance douce : tu dois pouvoir parler'),
-  e(5,3,'Retour au calme, jambes souples')]});
+  e(5,4,'Échauffement tranquille',75),
+  e(20,6+p,'Endurance douce : tu dois pouvoir parler',80),
+  e(5,3,'Retour au calme, jambes souples',70)]});
  programmes.seb.seances.push({nom:`Semaine ${s} – Explosivité ping (45 min)`,etapes:[
-  e(10,5,'Échauffement progressif'),
-  ...rep(6+s,e(0.5,14+2*p,'Sprint ! Cadence max'),e(1.5,5,'Récup active')),
-  e(3,5,'Petite pause, on souffle'),
-  ...rep(3,e(2,10+p,'Tempo soutenu, 90 rpm'),e(1,5,'Récup')),
-  e(23-2*(6+s),4,'Retour au calme')]});
+  e(10,5,'Échauffement progressif',75),
+  ...rep(6+s,e(0.5,14+2*p,'Sprint ! À fond',100),e(1.5,5,'Récup active',70)),
+  e(3,5,'Petite pause, on souffle',70),
+  ...rep(3,e(2,10+p,'Tempo soutenu',85),e(1,5,'Récup',70)),
+  e(23-2*(6+s),4,'Retour au calme',70)]});
 }
 
 // Justine : 2 séances/semaine, cardio 20 min + endurance et force 50 min
 for(let s=1;s<=4;s++){
  const p=s-1;
  programmes.justine.seances.push({nom:`Semaine ${s} – Cardio express (20 min)`,etapes:[
-  e(4,4,'Échauffement, 80-90 rpm'),
-  ...rep(6,e(1,10+2*p,'Effort ! Ça doit être dur'),e(1,5,'Récup')),
-  e(4,3,'Retour au calme')]});
+  e(4,4,'Échauffement',75),
+  ...rep(6,e(1,10+2*p,'Effort ! Ça doit être dur',85),e(1,5,'Récup',70)),
+  e(4,3,'Retour au calme',70)]});
  programmes.justine.seances.push({nom:`Semaine ${s} – Endurance + force (50 min)`,etapes:[
-  e(8,4,'Échauffement progressif'),
-  e(12,7+p,'Endurance, rythme régulier'),
-  ...rep(4,e(3,14+2*p,'Force : grosse résistance, 60-70 rpm'),e(2,6,'Récup')),
-  e(5,8+p,'Dernier bloc endurance'),
-  e(5,3,'Retour au calme')]});
+  e(8,4,'Échauffement progressif',75),
+  e(12,7+p,'Endurance, rythme régulier',80),
+  ...rep(4,e(3,14+2*p,'Force : grosse résistance',60),e(2,6,'Récup',70)),
+  e(5,8+p,'Dernier bloc endurance',80),
+  e(5,3,'Retour au calme',70)]});
 }
+
+// ===== SÉANCES LIBRES =====
+const palier=(niveaux,min,c,rpm)=>niveaux.map((n,i)=>e(min,n,c,typeof rpm==='function'?rpm(n):rpm));
+programmes.seb.libres=[
+ {nom:'Récup express (20 min)',info:'Tout en douceur, idéal le lendemain d\'un match',etapes:[
+  e(4,4,'Échauffement',75),e(12,5,'Tout en douceur, jambes légères',75),e(4,3,'Retour au calme',70)]},
+ {nom:'Jeu de jambes ping (25 min)',info:'10 × 15 s à fond, pour les démarrages',etapes:[
+  e(7,5,'Échauffement',75),...rep(10,e(0.25,14,'À fond !',100),e(0.75,5,'Tranquille',70)),e(8,4,'Retour au calme',70)]},
+ {nom:'Démarrages explosifs (20 min)',info:'6 × 10 s à grosse résistance',etapes:[
+  e(6,5,'Échauffement',75),...rep(6,e(1/6,18,'Démarrage explosif !',95),e(5/6,5,'Récup',70)),e(8,4,'Retour au calme',70)]},
+ {nom:'Pyramide (30 min)',info:'Résistance 6 → 14 → 6, paliers de 2 min',etapes:[
+  e(5,5,'Échauffement',75),...palier([6,8,10,12,14,12,10,8,6],2,'Palier de la pyramide',80),e(7,4,'Retour au calme',70)]},
+ {nom:'Tempo (35 min)',info:'3 × 6 min soutenu',etapes:[
+  e(7,5,'Échauffement',75),...rep(3,e(6,10,'Tempo soutenu',85),e(2,5,'Récup',70)),e(4,4,'Retour au calme',70)]},
+ {nom:'Grande endurance (60 min)',info:'Résistance 7, pour le fond',etapes:[
+  e(8,5,'Échauffement',75),e(45,7,'Endurance, rythme régulier',80),e(7,4,'Retour au calme',70)]}
+];
+programmes.justine.libres=[
+ {nom:'Tabata (20 min)',info:'2 séries de 8 × 20 s à fond / 10 s de repos',etapes:[
+  e(5,4,'Échauffement',75),...rep(8,e(1/3,14,'À fond !',90),e(1/6,4,'Repos',70)),e(2,4,'Récupère bien',70),
+  ...rep(8,e(1/3,14,'À fond !',90),e(1/6,4,'Repos',70)),e(5,3,'Retour au calme',70)]},
+ {nom:'Force lente (25 min)',info:'5 × 2 min à grosse résistance, 60 rpm',etapes:[
+  e(5,4,'Échauffement',75),...rep(5,e(2,16,'Force : appuie fort',60),e(1,5,'Récup',70)),e(5,3,'Retour au calme',70)]},
+ {nom:'Montée de col (30 min)',info:'La résistance monte toutes les 3 min',etapes:[
+  e(3,4,'Échauffement',75),...palier([6,8,10,12,14,16,18,20],3,'Ça monte !',n=>n<=10?75:n<=16?70:65),e(3,4,'Descente, relâche',75)]},
+ {nom:'Intervalles 1-1 (30 min)',info:'9 × 1 min d\'effort / 1 min de récup',etapes:[
+  e(6,4,'Échauffement',75),...rep(9,e(1,12,'Effort',85),e(1,5,'Récup',70)),e(6,3,'Retour au calme',70)]},
+ {nom:'Endurance + sprints (35 min)',info:'Du fond avec 5 sprints au milieu',etapes:[
+  e(6,4,'Échauffement',75),e(10,7,'Endurance',80),...rep(5,e(0.5,14,'Sprint !',90),e(1.5,5,'Récup',70)),
+  e(5,7,'Endurance',80),e(4,3,'Retour au calme',70)]},
+ {nom:'Balade tranquille (40 min)',info:'Résistance 5, sans se prendre la tête',etapes:[
+  e(5,4,'Échauffement',75),e(30,5,'Balade tranquille',75),e(5,3,'Retour au calme',70)]}
+];
+programmes.test.libres=[];
 
 // ===== OUTILS =====
 const $=id=>document.getElementById(id);
@@ -111,7 +148,7 @@ const pause=ms=>new Promise(r=>setTimeout(r,ms));
 const cle=p=>'velo_'+p;
 function faites(p){try{return JSON.parse(localStorage.getItem(cle(p))||'[]');}catch(x){return [];}}
 function sauver(p,f){try{localStorage.setItem(cle(p),JSON.stringify(f));}catch(x){}}
-let profil=null,seance=null,run=0,device=null,controlPoint=null;
+let profil=null,seance=null,libre=false,run=0,device=null,controlPoint=null;
 
 // ===== GRAPHIQUE =====
 const couleur=n=>n<=6?'#2a7':n<=11?'#e9b23a':'#e4573d';
@@ -125,8 +162,21 @@ function graphe(s,cur=-1,ecoule=-1,mini=false){
  if(ecoule>=0){const cx=ecoule/tot*W;out+=`<line x1="${cx}" y1="${mini?0:-40}" x2="${cx}" y2="${H}" stroke="#fff" stroke-width="5"/>`;}
  return `<svg viewBox="0 ${mini?0:-40} ${W} ${H+(mini?0:40)}" width="100%">${out}</svg>`;
 }
+let rpmCible=null,rpmActuel=null;
+function jauge(){
+ const MIN=40,MAX=130,W=1000,px=v=>(Math.min(MAX,Math.max(MIN,v))-MIN)/(MAX-MIN)*W;
+ let out=`<rect x="0" y="30" width="${W}" height="24" rx="12" fill="#333"/>`;
+ for(let v=50;v<=120;v+=10)out+=`<text x="${px(v)}" y="86" fill="#888" font-size="24" text-anchor="middle">${v}</text>`;
+ if(rpmCible){out+=`<rect x="${px(rpmCible-5)}" y="26" width="${px(rpmCible+5)-px(rpmCible-5)}" height="32" rx="8" fill="#2a7"/>`;
+  out+=`<text x="${px(rpmCible)}" y="20" fill="#2a7" font-size="26" text-anchor="middle" font-weight="bold">objectif ${rpmCible} rpm</text>`;}
+ if(rpmActuel!==null){const ok=rpmCible&&Math.abs(rpmActuel-rpmCible)<=5;
+  out+=`<circle cx="${px(rpmActuel)}" cy="42" r="20" fill="${!rpmCible||ok?'#fff':'#fc6'}" stroke="#111" stroke-width="4"/>`;}
+ $('jauge').innerHTML=`<svg viewBox="0 -4 ${W} 98" width="100%">${out}</svg>`;
+ const c=$('cadence');c.style.color=rpmActuel===null||!rpmCible?'':Math.abs(rpmActuel-rpmCible)<=5?'#4c8':'#fc6';
+ $('rpmCible').textContent=rpmCible||'--';
+}
 function listeEtapes(s,cur){
- $('etapes').innerHTML=s.etapes.map((et,i)=>`<div class="${i===cur?'cur':i<cur?'passe':''}">${fmtD(et.d)} · rés ${et.n} · ${et.c}</div>`).join('');
+ $('etapes').innerHTML=s.etapes.map((et,i)=>`<div class="${i===cur?'cur':i<cur?'passe':''}">${fmtD(et.d)} · rés ${et.n} · ${et.r} rpm · ${et.c}</div>`).join('');
  const c=$('etapes').querySelector('.cur');if(c)c.scrollIntoView({block:'nearest'});
 }
 
@@ -137,14 +187,17 @@ function afficherListe(){
  const prochaine=prog.seances.findIndex((_,i)=>!f.includes(i));
  $('titreProfil').textContent='Programme de '+prog.nom;
  $('liste').innerHTML=prog.seances.map((s,i)=>`<div class="card ${f.includes(i)?'done':''}">${f.includes(i)?'✅ ':''}${i===prochaine?'👉 ':''}<b>${s.nom}</b>${graphe(s,-1,-1,true)}<button onclick="ouvrir(${i})">${f.includes(i)?'Refaire':'Faire'}</button></div>`).join('')
+  +`<h3>Séances libres</h3>`
+  +prog.libres.map((s,i)=>`<div class="card"><b>${s.nom}</b><br><span class="label">${s.info}</span>${graphe(s,-1,-1,true)}<button onclick="ouvrir(${i},true)">Faire</button></div>`).join('')
   +`<button class="sec" onclick="if(confirm('Remettre le programme à zéro ?')){try{localStorage.removeItem(cle(profil))}catch(x){};afficherListe()}">Remettre à zéro</button>`;
  show('ecranListe');
 }
-function ouvrir(i){
- seance=i;const s=programmes[profil].seances[i];
+function seanceCourante(){const p=programmes[profil];return libre?p.libres[seance]:p.seances[seance];}
+function ouvrir(i,lib=false){
+ seance=i;libre=lib;const s=seanceCourante();
  $('titreSeance').textContent=s.nom;
  $('graphe').innerHTML=graphe(s);listeEtapes(s,-1);
- $('consigne').textContent='';$('ensuite').textContent='';$('cible').textContent=s.etapes[0].n;
+ $('consigne').textContent='';$('ensuite').textContent='';$('cible').textContent=s.etapes[0].n;rpmCible=s.etapes[0].r;jauge();
  $('timer').textContent='--:--';$('total').textContent=fmt(s.etapes.reduce((a,x)=>a+x.d,0));
  $('btnStart').disabled=!controlPoint;show('ecranSeance');
 }
@@ -208,7 +261,7 @@ function lireDonnees(ev){
  const v=ev.target.value,flags=v.getUint16(0,true);let i=2;
  if(!(flags&0x01))i+=2;
  if(flags&0x02)i+=2;
- if(flags&0x04){$('cadence').textContent=Math.round(v.getUint16(i,true)/2);i+=2;}
+ if(flags&0x04){rpmActuel=Math.round(v.getUint16(i,true)/2);$('cadence').textContent=rpmActuel;jauge();i+=2;}
  if(flags&0x08)i+=2;
  if(flags&0x10)i+=3;
  if(flags&0x20){let r=v.getInt16(i,true);if(r>40)r=Math.round(r/10);$('reel').textContent=r;i+=2;}
@@ -237,7 +290,7 @@ async function reglerResistance(n){
 
 // ===== SÉANCE =====
 $('btnStart').onclick=async()=>{
- const moi=++run,s=programmes[profil].seances[seance];
+ const moi=++run,s=seanceCourante();
  $('btnStart').disabled=true;
  log('Démarrage : '+nomCode(await ecrireCP([0x07])));
  const tot=s.etapes.reduce((a,x)=>a+x.d,0);let ecoule=0;
@@ -245,8 +298,8 @@ $('btnStart').onclick=async()=>{
   const et=s.etapes[k],suiv=s.etapes[k+1];
   if(run!==moi)return;
   $('consigne').textContent=et.c;
-  $('ensuite').textContent=suiv?'Ensuite : '+fmtD(suiv.d)+' à résistance '+suiv.n:'Dernière étape !';
-  listeEtapes(s,k);
+  $('ensuite').textContent=suiv?'Ensuite : '+fmtD(suiv.d)+' à résistance '+suiv.n+', '+suiv.r+' rpm':'Dernière étape !';
+  listeEtapes(s,k);rpmCible=et.r;jauge();
   await reglerResistance(et.n);
   for(let t=et.d;t>0;t--){
    if(run!==moi)return;
@@ -255,8 +308,8 @@ $('btnStart').onclick=async()=>{
    await pause(1000);ecoule++;
   }
  }
- const f=faites(profil);if(!f.includes(seance))f.push(seance);sauver(profil,f);
- $('timer').textContent='Fini 🎉';$('consigne').textContent='Bravo ! Séance enregistrée.';$('ensuite').textContent='';
+ if(!libre){const f=faites(profil);if(!f.includes(seance))f.push(seance);sauver(profil,f);}
+ $('timer').textContent='Fini 🎉';$('consigne').textContent=libre?'Bravo ! Séance terminée.':'Bravo ! Séance enregistrée.';$('ensuite').textContent='';
  $('graphe').innerHTML=graphe(s);
  run=0;$('btnStart').disabled=false;
  await reglerResistance(3);
