@@ -1,15 +1,24 @@
 <!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mon Vélo</title>
 <style>
-body{font-family:sans-serif;background:#111;color:#eee;text-align:center;padding:15px;margin:0}
-button{font-size:1.1em;padding:14px 22px;margin:8px;border:none;border-radius:10px;background:#2a7;color:#fff}
+body{font-family:sans-serif;background:#111;color:#eee;text-align:center;padding:12px;margin:0}
+button{font-size:1.1em;padding:14px 22px;margin:6px;border:none;border-radius:10px;background:#2a7;color:#fff}
 button:disabled{background:#555}
 .prof{background:#36c;font-size:1.4em;width:80%}.sec{background:#444}
-.card{background:#222;border-radius:10px;padding:10px;margin:8px auto;max-width:420px;text-align:left}
-.done{opacity:.5}
-.stat{font-size:2em;margin:6px}.label{font-size:.8em;color:#aaa}
-#consigne{font-size:1.3em;color:#fc6;margin:10px}
-#log{font-size:.8em;color:#888;margin-top:15px;white-space:pre-line}
+.retour{background:#444;font-size:1em;padding:10px 16px;display:block;margin:0 0 8px 0}
+.card{background:#222;border-radius:10px;padding:10px;margin:8px auto;max-width:460px;text-align:left}
+.done{opacity:.55}
+.grand{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.bloc{background:#222;border-radius:10px;padding:8px 14px;min-width:120px}
+.big{font-size:2.6em;font-weight:bold}.cible{color:#fc6}
+.stat{font-size:1.8em;margin:4px}.label{font-size:.8em;color:#aaa}
+#consigne{font-size:1.3em;color:#fc6;margin:8px}
+#ensuite{color:#aaa;margin-bottom:6px}
+#etapes{max-height:170px;overflow-y:auto;background:#1a1a1a;border-radius:10px;text-align:left;padding:6px;margin:8px auto;max-width:460px;font-size:.9em}
+#etapes div{padding:3px 6px;border-radius:6px}
+#etapes .cur{background:#36c;color:#fff}
+#etapes .passe{color:#666}
+#log{font-size:.75em;color:#888;margin-top:15px;white-space:pre-line;text-align:left}
 .hidden{display:none}
 </style></head><body>
 <h1>🚴 Mon Vélo</h1>
@@ -17,35 +26,47 @@ button:disabled{background:#555}
 <div id="ecranProfil">
 <button class="prof" onclick="choisirProfil('seb')">Sébastien</button>
 <button class="prof" onclick="choisirProfil('justine')">Justine</button>
+<br><button class="sec" onclick="profil='test';ouvrir(0)">🔧 Test résistance (3 → 10 → 20)</button>
 </div>
 
 <div id="ecranListe" class="hidden">
+<button class="retour" onclick="show('ecranProfil')">← Changer de profil</button>
 <h2 id="titreProfil"></h2>
-<button class="sec" onclick="show('ecranProfil')">← Changer de profil</button>
 <div id="liste"></div>
 </div>
 
 <div id="ecranSeance" class="hidden">
+<button class="retour" onclick="retour()">← Retour aux séances</button>
 <h2 id="titreSeance"></h2>
+<div id="graphe"></div>
 <button id="btnConnect">Se connecter au vélo</button>
 <button id="btnStart" disabled>Lancer la séance</button>
-<button class="sec" onclick="arreter()">Arrêter / retour</button>
 <div id="consigne"></div>
-<div class="stat"><span id="timer">--:--</span><div class="label">Temps restant de l'étape</div></div>
-<div class="stat"><span id="level">--</span><div class="label">Résistance (sur 32)</div></div>
-<div class="stat"><span id="power">--</span> W<div class="label">Puissance</div></div>
-<div class="stat"><span id="cadence">--</span> rpm<div class="label">Cadence</div></div>
-<div class="stat"><span id="total">--:--</span><div class="label">Temps total restant</div></div>
+<div id="ensuite"></div>
+<div class="grand">
+ <div class="bloc"><div class="big cible" id="cible">--</div><div class="label">Résistance à avoir</div></div>
+ <div class="bloc"><div class="big" id="reel">--</div><div class="label">Résistance du vélo</div></div>
+</div>
+<div class="grand">
+ <div class="stat"><span id="timer">--:--</span><div class="label">Fin de l'étape</div></div>
+ <div class="stat"><span id="total">--:--</span><div class="label">Fin de séance</div></div>
+</div>
+<div class="grand">
+ <div class="stat"><span id="power">--</span> W<div class="label">Puissance</div></div>
+ <div class="stat"><span id="cadence">--</span> rpm<div class="label">Cadence</div></div>
+</div>
+<div id="etapes"></div>
 </div>
 <div id="log"></div>
 
 <script>
 // ===== PROGRAMMES =====
-// e(minutes, niveau de résistance, consigne)
+// e(minutes, niveau de résistance sur 32, consigne)
 const e=(m,n,c)=>({d:Math.round(m*60),n,c});
 function rep(nb,a,b){let r=[];for(let i=0;i<nb;i++)r.push(a,b);return r;}
 
-const programmes={seb:{nom:'Sébastien',seances:[]},justine:{nom:'Justine',seances:[]}};
+const programmes={seb:{nom:'Sébastien',seances:[]},justine:{nom:'Justine',seances:[]},
+ test:{nom:'Test',seances:[{nom:'Test résistance',etapes:[e(0.5,3,'Résistance 3'),e(0.5,10,'Résistance 10'),e(0.5,20,'Résistance 20')]}]}};
 
 // Sébastien : 2 séances/semaine, récup 30 min + explosivité ping 45 min
 for(let s=1;s<=4;s++){
@@ -77,30 +98,74 @@ for(let s=1;s<=4;s++){
   e(5,3,'Retour au calme')]});
 }
 
-// ===== ÉCRANS =====
+// ===== OUTILS =====
 const $=id=>document.getElementById(id);
 const show=id=>['ecranProfil','ecranListe','ecranSeance'].forEach(x=>$(x).classList.toggle('hidden',x!==id));
 const fmt=t=>Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+const fmtD=d=>d<60?d+' s':(d%60?Math.floor(d/60)+' min '+(d%60)+' s':(d/60)+' min');
 const log=t=>$('log').textContent=t+'\n'+$('log').textContent;
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 const cle=p=>'velo_'+p;
-const faites=p=>JSON.parse(localStorage.getItem(cle(p))||'[]');
-let profil=null,seance=null,enCours=false,device=null,controlPoint=null;
+function faites(p){try{return JSON.parse(localStorage.getItem(cle(p))||'[]');}catch(x){return [];}}
+function sauver(p,f){try{localStorage.setItem(cle(p),JSON.stringify(f));}catch(x){}}
+let profil=null,seance=null,run=0,device=null,controlPoint=null;
 
+// ===== GRAPHIQUE =====
+const couleur=n=>n<=6?'#2a7':n<=11?'#e9b23a':'#e4573d';
+function graphe(s,cur=-1,ecoule=-1,mini=false){
+ const W=1000,H=mini?80:200,tot=s.etapes.reduce((a,x)=>a+x.d,0);let x=0,out='';
+ s.etapes.forEach((et,i)=>{
+  const w=et.d/tot*W,h=Math.max(6,et.n/32*H);
+  out+=`<rect x="${x+1}" y="${H-h}" width="${Math.max(1,w-2)}" height="${h}" fill="${couleur(et.n)}" opacity="${cur>=0&&i!==cur?0.6:1}" ${i===cur?'stroke="#fff" stroke-width="5"':''}/>`;
+  if(!mini&&w>45)out+=`<text x="${x+w/2}" y="${H-h-8}" fill="#eee" font-size="30" text-anchor="middle">${et.n}</text>`;
+  x+=w;});
+ if(ecoule>=0){const cx=ecoule/tot*W;out+=`<line x1="${cx}" y1="${mini?0:-40}" x2="${cx}" y2="${H}" stroke="#fff" stroke-width="5"/>`;}
+ return `<svg viewBox="0 ${mini?0:-40} ${W} ${H+(mini?0:40)}" width="100%">${out}</svg>`;
+}
+function listeEtapes(s,cur){
+ $('etapes').innerHTML=s.etapes.map((et,i)=>`<div class="${i===cur?'cur':i<cur?'passe':''}">${fmtD(et.d)} · rés ${et.n} · ${et.c}</div>`).join('');
+ const c=$('etapes').querySelector('.cur');if(c)c.scrollIntoView({block:'nearest'});
+}
+
+// ===== ÉCRANS =====
 function choisirProfil(p){profil=p;afficherListe();}
 function afficherListe(){
  const prog=programmes[profil],f=faites(profil);
  const prochaine=prog.seances.findIndex((_,i)=>!f.includes(i));
  $('titreProfil').textContent='Programme de '+prog.nom;
- $('liste').innerHTML=prog.seances.map((s,i)=>`<div class="card ${f.includes(i)?'done':''}">${f.includes(i)?'✅ ':''}${i===prochaine?'👉 ':''}<b>${s.nom}</b><br><button onclick="ouvrir(${i})">${f.includes(i)?'Refaire':'Faire'}</button></div>`).join('')
-  +`<button class="sec" onclick="if(confirm('Remettre le programme à zéro ?')){localStorage.removeItem(cle(profil));afficherListe()}">Remettre à zéro</button>`;
+ $('liste').innerHTML=prog.seances.map((s,i)=>`<div class="card ${f.includes(i)?'done':''}">${f.includes(i)?'✅ ':''}${i===prochaine?'👉 ':''}<b>${s.nom}</b>${graphe(s,-1,-1,true)}<button onclick="ouvrir(${i})">${f.includes(i)?'Refaire':'Faire'}</button></div>`).join('')
+  +`<button class="sec" onclick="if(confirm('Remettre le programme à zéro ?')){try{localStorage.removeItem(cle(profil))}catch(x){};afficherListe()}">Remettre à zéro</button>`;
  show('ecranListe');
 }
-function ouvrir(i){seance=i;$('titreSeance').textContent=programmes[profil].seances[i].nom;$('consigne').textContent='';$('btnStart').disabled=!controlPoint;show('ecranSeance');}
-function arreter(){enCours=false;afficherListe();}
+function ouvrir(i){
+ seance=i;const s=programmes[profil].seances[i];
+ $('titreSeance').textContent=s.nom;
+ $('graphe').innerHTML=graphe(s);listeEtapes(s,-1);
+ $('consigne').textContent='';$('ensuite').textContent='';$('cible').textContent=s.etapes[0].n;
+ $('timer').textContent='--:--';$('total').textContent=fmt(s.etapes.reduce((a,x)=>a+x.d,0));
+ $('btnStart').disabled=!controlPoint;show('ecranSeance');
+}
+function retour(){
+ if(run&&$('btnStart').disabled&&controlPoint&&!confirm('Arrêter la séance en cours ?'))return;
+ run++;$('btnStart').disabled=!controlPoint;
+ if(profil==='test')show('ecranProfil');else afficherListe();
+}
 
 // ===== BLUETOOTH =====
 const avecDelai=(pr,ms)=>Promise.race([pr,new Promise((_,rej)=>setTimeout(()=>rej(new Error('pas de réponse après '+ms/1000+' s')),ms))]);
+let attente=null,plage=null,format=null;
+const nomCode=r=>({1:'OK ✅',2:'non supporté',3:'valeur refusée',4:'échec',5:'contrôle refusé',0:'pas de réponse',[-1]:'erreur d\'envoi'})[r]||('code '+r);
+function surReponse(ev){
+ const v=ev.target.value;
+ if(v.byteLength>=3&&v.getUint8(0)===0x80&&attente&&attente.op===v.getUint8(1)){const a=attente;attente=null;a.res(v.getUint8(2));}
+}
+function ecrireCP(bytes){
+ return new Promise(res=>{
+  attente={op:bytes[0],res};
+  setTimeout(()=>{if(attente&&attente.res===res){attente=null;res(0);}},2500);
+  controlPoint.writeValue(new Uint8Array(bytes)).catch(err=>{log('Erreur envoi : '+err.message);if(attente&&attente.res===res){attente=null;res(-1);}});
+ });
+}
 async function connecter(){
  for(let essai=1;essai<=3;essai++){
   try{
@@ -110,14 +175,20 @@ async function connecter(){
    const server=await avecDelai(device.gatt.connect(),10000);
    await pause(1000);
    const service=await avecDelai(server.getPrimaryService(0x1826),10000);
+   try{
+    const v=await (await service.getCharacteristic(0x2AD6)).readValue();
+    plage={min:v.getInt16(0,true),max:v.getInt16(2,true),inc:v.getUint16(4,true)};
+    log('Plage de résistance du vélo : '+plage.min+' à '+plage.max+' (pas '+plage.inc+')');
+   }catch(x){plage=null;log('Plage de résistance inconnue');}
    const data=await service.getCharacteristic(0x2AD2);
    data.addEventListener('characteristicvaluechanged',lireDonnees);
    await data.startNotifications();
    await pause(300);
    controlPoint=await service.getCharacteristic(0x2AD9);
+   controlPoint.addEventListener('characteristicvaluechanged',surReponse);
    await controlPoint.startNotifications();
    await pause(300);
-   await controlPoint.writeValue(new Uint8Array([0x00]));
+   log('Prise de contrôle : '+nomCode(await ecrireCP([0x00])));
    log('Connecté ✅');$('btnStart').disabled=false;return;
   }catch(err){log('Essai '+essai+' raté : '+err.message);await pause(1500);}
  }
@@ -137,35 +208,54 @@ function lireDonnees(ev){
  if(flags&0x04){$('cadence').textContent=Math.round(v.getUint16(i,true)/2);i+=2;}
  if(flags&0x08)i+=2;
  if(flags&0x10)i+=3;
- if(flags&0x20)i+=2;
+ if(flags&0x20){let r=v.getInt16(i,true);if(r>40)r=Math.round(r/10);$('reel').textContent=r;i+=2;}
  if(flags&0x40){$('power').textContent=v.getInt16(i,true);i+=2;}
 }
+function valeurPour(n){
+ if(plage&&plage.max>plage.min){
+  let v=plage.min+Math.round((n-1)/31*(plage.max-plage.min));
+  if(plage.inc>0)v=plage.min+Math.round((v-plage.min)/plage.inc)*plage.inc;
+  return Math.min(plage.max,Math.max(plage.min,v));
+ }
+ return n*10;
+}
 async function reglerResistance(n){
- $('level').textContent=n;
- try{await controlPoint.writeValue(new Uint8Array([0x04,Math.min(n*10,250)]));}
- catch(err){log('Erreur résistance : '+err.message);}
+ $('cible').textContent=n;
+ if(!controlPoint)return;
+ for(const f of (format?[format]:['8 bits','16 bits'])){
+  const val=f==='8 bits'?Math.min(n*10,250):valeurPour(n);
+  const bytes=f==='16 bits'?[0x04,val&255,(val>>8)&255]:[0x04,val];
+  let r=await ecrireCP(bytes);
+  if(r===5){await ecrireCP([0x00]);r=await ecrireCP(bytes);}
+  log('Résistance '+n+' → envoyé '+val+' ('+f+') : '+nomCode(r));
+  if(r===1){format=f;return;}
+ }
 }
 
 // ===== SÉANCE =====
 $('btnStart').onclick=async()=>{
- const s=programmes[profil].seances[seance];
- enCours=true;$('btnStart').disabled=true;
- await controlPoint.writeValue(new Uint8Array([0x07])).catch(()=>{});
- let reste=s.etapes.reduce((a,x)=>a+x.d,0);
- for(const et of s.etapes){
-  if(!enCours)return;
+ const moi=++run,s=programmes[profil].seances[seance];
+ $('btnStart').disabled=true;
+ log('Démarrage : '+nomCode(await ecrireCP([0x07])));
+ const tot=s.etapes.reduce((a,x)=>a+x.d,0);let ecoule=0;
+ for(let k=0;k<s.etapes.length;k++){
+  const et=s.etapes[k],suiv=s.etapes[k+1];
+  if(run!==moi)return;
   $('consigne').textContent=et.c;
+  $('ensuite').textContent=suiv?'Ensuite : '+fmtD(suiv.d)+' à résistance '+suiv.n:'Dernière étape !';
+  listeEtapes(s,k);
   await reglerResistance(et.n);
   for(let t=et.d;t>0;t--){
-   if(!enCours)return;
-   $('timer').textContent=fmt(t);$('total').textContent=fmt(reste--);
-   await pause(1000);
+   if(run!==moi)return;
+   $('timer').textContent=fmt(t);$('total').textContent=fmt(tot-ecoule);
+   $('graphe').innerHTML=graphe(s,k,ecoule);
+   await pause(1000);ecoule++;
   }
  }
- const f=faites(profil);if(!f.includes(seance))f.push(seance);
- localStorage.setItem(cle(profil),JSON.stringify(f));
- $('timer').textContent='Fini 🎉';$('consigne').textContent='Bravo ! Séance enregistrée.';
- enCours=false;$('btnStart').disabled=false;
+ const f=faites(profil);if(!f.includes(seance))f.push(seance);sauver(profil,f);
+ $('timer').textContent='Fini 🎉';$('consigne').textContent='Bravo ! Séance enregistrée.';$('ensuite').textContent='';
+ $('graphe').innerHTML=graphe(s);
+ run=0;$('btnStart').disabled=false;
  await reglerResistance(3);
 };
 </script>
