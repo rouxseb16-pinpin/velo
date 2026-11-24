@@ -1,3 +1,6 @@
+Code appli vélo – index.html (v2)
+Copie tout le bloc ci-dessous et remplace le contenu de index.html sur GitHub.
+Version 4 : graphique de la séance, liste des étapes, résistance à avoir et résistance réelle du vélo, bouton retour, envoi de la résistance revu avec diagnostic.
 <!DOCTYPE html>
 <html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Mon Vélo</title>
 <style>
@@ -223,7 +226,7 @@ async function reglerResistance(n){
  $('cible').textContent=n;
  if(!controlPoint)return;
  for(const f of (format?[format]:['8 bits','16 bits'])){
-  const val=f==='8 bits'?Math.min(n*10,250):valeurPour(n);
+  const val=f==='8 bits'?n:valeurPour(n);
   const bytes=f==='16 bits'?[0x04,val&255,(val>>8)&255]:[0x04,val];
   let r=await ecrireCP(bytes);
   if(r===5){await ecrireCP([0x00]);r=await ecrireCP(bytes);}
