@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mon Vélo</title>
+<style>
+  body { font-family: sans-serif; background:#111; color:#eee; text-align:center; padding:20px; }
+  button { font-size:1.2em; padding:15px 25px; margin:10px; border:none; border-radius:10px; background:#2a7; color:#fff; }
+  button:disabled { background:#555; }
+  .stat { font-size:2.2em; margin:8px; }
+  .label { font-size:0.8em; color:#aaa; }
+  #log { font-size:0.8em; color:#888; margin-top:20px; white-space:pre-line; }
+</style>
+</head>
+<body>
+<h1>🚴 Mon Vélo</h1>
+<button id="btnConnect">Se connecter au vélo</button>
+<button id="btnStart" disabled>Lancer la séance test</button>
+
+<div class="stat"><span id="power">--</span> W<div class="label">Puissance</div></div>
+<div class="stat"><span id="cadence">--</span> rpm<div class="label">Cadence</div></div>
+<div class="stat"><span id="speed">--</span> km/h<div class="label">Vitesse</div></div>
+<div class="stat"><span id="level">--</span><div class="label">Résistance demandée</div></div>
+<div class="stat"><span id="timer">--:--</span><div class="label">Temps restant de l'étape</div></div>
+<div id="log"></div>
+
+<script>
+const seance = [
+  { duree: 120, niveau: 3 },
+  { duree: 120, niveau: 8 },
+  { duree: 60,  niveau: 3 }
+];
+
+let controlPoint = null;
+const log = (t) => document.getElementById('log').textContent = t + '\n' + document.getElementById('log').textContent;
+
+document.getElementById('btnConnect').onclick = async () => {
+  try {
+    const device = await navigator.bluetooth.requestDevice({ filters: [{ services: [0x1826] }] });
+    log('Connexion à ' + device.name + '...');
+    const server = await device.gatt.connect();
+    const service = await server.getPrimaryService(0x1826);
+
+    const data = await service.getCharacteristic(0x2AD2);
+    data.addEventListener('characteristicvaluechanged', lireDonnees);
+    await data.startNotifications();
+
+    controlPoint = await service.getCharacteristic(0x2AD9);
+    controlPoint.addEventListener('characteristicvaluechanged', e => log('Réponse vélo : ' + new Uint8Array(e.target.value.buffer).join(',')));
+    await controlPoint.startNotifications();
+    await controlPoint.writeValue(new Uint8Array([0x00]));
+    log('Connecté ✅');
+    document.getElementById('btnStart').disabled = false;
+  } catch (err) { log('Erreur : ' + err.message); }
+};
+
+function lireDonnees(e) {
+  const v = e.target.value;
+  const flags = v.getUint16(0, true);
+  let i = 2;
+  if (!(flags & 0x01)) { document.getElementById('speed').textContent = (v.getUint16(i, true) / 100).toFixed(1); i += 2; }
+  if (flags & 0x02) i += 2;
+  if (flags & 0x04) { document.getElementById('cadence').textContent = Math.round(v.getUint16(i, true) / 2); i += 2; }
+  if (flags & 0x08) i += 2;
+  if (flags & 0x10) i += 3;
+  if (flags & 0x20) i += 2;
+  if (flags & 0x40) { document.getElementById('power').textContent = v.getInt16(i, true); i += 2; }
+}
+
+async function reglerResistance(niveau) {
+  document.getElementById('level').textContent = niveau;
+  try {
+    await controlPoint.writeValue(new Uint8Array([0x04, niveau * 10]));
+    log('Résistance → ' + niveau);
+  } catch (err) { log('Erreur résistance : ' + err.message); }
+}
+
+document.getElementById('btnStart').onclick = async () => {
+  document.getElementById('btnStart').disabled = true;
+  await controlPoint.writeValue(new Uint8Array([0x07])).catch(()=>{});
+  for (const etape of seance) {
+    await reglerResistance(etape.niveau);
+    for (let t = etape.duree; t > 0; t--) {
+      document.getElementById('timer').textContent = Math.floor(t/60) + ':' + String(t%60).padStart(2,'0');
+      await new Promise(r => setTimeout(r, 1000));
+    }
+  }
+  document.getElementById('timer').textContent = 'Fini 🎉';
+  log('Séance terminée');
+  document.getElementById('btnStart').disabled = false;
+};
+</script>
+</body>
+</html>
